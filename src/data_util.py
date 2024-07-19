@@ -62,7 +62,7 @@ class Dataset_(Dataset):
                  data_dir,
                  train,
                  crop_long_edge=False,
-                 resize_size=None,
+                 resize_size=(256, 256),
                  resizer="lanczos",
                  random_flip=False,
                  normalize=True,

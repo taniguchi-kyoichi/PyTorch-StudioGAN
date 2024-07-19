@@ -63,7 +63,7 @@ def frechet_inception_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
 
 
 def calculate_moments(data_loader, eval_model, num_generate, batch_size, quantize, world_size,
-                      DDP, disable_tqdm, fake_feats=None):
+                      DDP, disable_tqdm, device, fake_feats=None):
     if fake_feats is not None:
         total_instance = num_generate
         acts = fake_feats.detach().cpu().numpy()[:num_generate]
@@ -72,7 +72,7 @@ def calculate_moments(data_loader, eval_model, num_generate, batch_size, quantiz
         total_instance = len(data_loader.dataset)
         data_iter = iter(data_loader)
         num_batches = math.ceil(float(total_instance) / float(batch_size))
-        if DDP: num_batches = int(math.ceil(float(total_instance) / float(batch_size*world_size)))
+        if DDP: num_batches = int(math.ceil(float(total_instance) / float(batch_size * world_size)))
 
         acts = []
         for i in tqdm(range(0, num_batches), disable=disable_tqdm):
@@ -83,7 +83,7 @@ def calculate_moments(data_loader, eval_model, num_generate, batch_size, quantiz
             except StopIteration:
                 break
 
-            images, labels = images.to("cuda"), labels.to("cuda")
+            images, labels = images.to(device), labels.to(device)
 
             with torch.no_grad():
                 embeddings, logits = eval_model.get_outputs(images, quantize=quantize)
@@ -106,7 +106,8 @@ def calculate_fid(data_loader,
                   pre_cal_std=None,
                   quantize=True,
                   fake_feats=None,
-                  disable_tqdm=False):
+                  disable_tqdm=False,
+                  device=torch.device("cpu")):
     eval_model.eval()
 
     if pre_cal_mean is not None and pre_cal_std is not None:
@@ -120,6 +121,7 @@ def calculate_fid(data_loader,
                                    world_size=cfgs.OPTIMIZATION.world_size,
                                    DDP=cfgs.RUN.distributed_data_parallel,
                                    disable_tqdm=disable_tqdm,
+                                   device=device,
                                    fake_feats=None)
 
     m2, s2 = calculate_moments(data_loader="N/A",
@@ -130,6 +132,7 @@ def calculate_fid(data_loader,
                                world_size=cfgs.OPTIMIZATION.world_size,
                                DDP=cfgs.RUN.distributed_data_parallel,
                                disable_tqdm=disable_tqdm,
+                               device=device,
                                fake_feats=fake_feats)
 
     fid_value = frechet_inception_distance(m1, s1, m2, s2)

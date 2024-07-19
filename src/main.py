@@ -126,7 +126,11 @@ def load_configs_initialize_training():
         parser.print_help(sys.stderr)
         sys.exit(1)
 
-    gpus_per_node, rank = torch.cuda.device_count(), torch.cuda.current_device()
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+        gpus_per_node, rank = 1, 0
+    else:
+        raise AssertionError("MPS not enabled")
 
     cfgs = config.Configurations(args.cfg_file)
     cfgs.update_cfgs(run_cfgs, super="RUN")
@@ -175,22 +179,8 @@ def load_configs_initialize_training():
 if __name__ == "__main__":
     cfgs, gpus_per_node, run_name, hdf5_path, rank = load_configs_initialize_training()
 
-    if cfgs.RUN.distributed_data_parallel and cfgs.OPTIMIZATION.world_size > 1:
-        mp.set_start_method("spawn", force=True)
-        print("Train the models through DistributedDataParallel (DDP) mode.")
-        ctx = torch.multiprocessing.spawn(fn=loader.load_worker,
-                                          args=(cfgs,
-                                                gpus_per_node,
-                                                run_name,
-                                                hdf5_path),
-                                          nprocs=gpus_per_node,
-                                          join=False)
-        ctx.join()
-        for process in ctx.processes:
-            process.kill()
-    else:
-        loader.load_worker(local_rank=rank,
-                           cfgs=cfgs,
-                           gpus_per_node=gpus_per_node,
-                           run_name=run_name,
-                           hdf5_path=hdf5_path)
+    loader.load_worker(local_rank=rank,
+                       cfgs=cfgs,
+                       gpus_per_node=gpus_per_node,
+                       run_name=run_name,
+                       hdf5_path=hdf5_path)

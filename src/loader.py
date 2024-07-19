@@ -92,11 +92,15 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
         global_rank = cfgs.RUN.current_node * (gpus_per_node) + local_rank
         print("Use GPU: {global_rank} for training.".format(global_rank=global_rank))
         misc.setup(global_rank, cfgs.OPTIMIZATION.world_size, cfgs.RUN.backend)
-        torch.cuda.set_device(local_rank)
     else:
         global_rank = local_rank
 
     misc.fix_seed(cfgs.RUN.seed + global_rank)
+
+    # -----------------------------------------------------------------------------
+    # デバイスを設定
+    # -----------------------------------------------------------------------------
+    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
     # -----------------------------------------------------------------------------
     # Intialize python logger.
@@ -216,7 +220,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                            STYLEGAN=cfgs.STYLEGAN,
                                            MODULES=cfgs.MODULES,
                                            RUN=cfgs.RUN,
-                                           device=local_rank,
+                                           device=device,
                                            logger=logger)
 
     if local_rank != 0:
@@ -248,7 +252,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                       RUN=cfgs.RUN,
                                       logger=logger,
                                       global_rank=global_rank,
-                                      device=local_rank,
+                                      device=device,
                                       cfg_file=cfgs.RUN.cfg_file)
 
         if topk == "initialize":
@@ -284,7 +288,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                         distributed_data_parallel=cfgs.RUN.distributed_data_parallel,
                                         synchronized_bn=cfgs.RUN.synchronized_bn,
                                         apply_g_ema=cfgs.MODEL.apply_g_ema,
-                                        device=local_rank)
+                                        device=device)
 
     # -----------------------------------------------------------------------------
     # load a pre-trained network (InceptionV3, SwAV, DINO, or Swin-T)
@@ -302,7 +306,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                       post_resizer=cfgs.RUN.post_resizer,
                                       world_size=cfgs.OPTIMIZATION.world_size,
                                       distributed_data_parallel=cfgs.RUN.distributed_data_parallel,
-                                      device=local_rank)
+                                      device=device)
 
     if "fid" in cfgs.RUN.eval_metrics:
         mu, sigma = pp.prepare_moments(data_loader=eval_dataloader,
@@ -310,7 +314,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                        quantize=True,
                                        cfgs=cfgs,
                                        logger=logger,
-                                       device=local_rank)
+                                       device=device)
 
     if "prdc" in cfgs.RUN.eval_metrics:
         if cfgs.RUN.distributed_data_parallel:
@@ -336,7 +340,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                            quantize=True,
                                            cfgs=cfgs,
                                            logger=logger,
-                                           device=local_rank)
+                                           device=device)
 
     if cfgs.RUN.calc_is_ref_dataset:
         pp.calculate_ins(data_loader=eval_dataloader,
@@ -345,7 +349,7 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                          splits=1,
                          cfgs=cfgs,
                          logger=logger,
-                         device=local_rank)
+                         device=device)
 
     # -----------------------------------------------------------------------------
     # initialize WORKER for training and evaluating GAN
@@ -412,12 +416,12 @@ def load_worker(local_rank, cfgs, gpus_per_node, run_name, hdf5_path):
                                                   inf_k=int(cfgs.OPTIMIZATION.batch_size * cfgs.LOSS.topk_nu))
 
             if step % cfgs.RUN.save_freq == 0:
-                # visuailize fake images
+                # visuailze fake images
                 if global_rank == 0:
                    worker.visualize_fake_images(num_cols=num_cols, current_step=step)
 
                 # evaluate GAN for monitoring purpose
-                if len(cfgs.RUN.eval_metrics) :
+                if len(cfgs.RUN.eval_metrics):
                     is_best = worker.evaluate(step=step, metrics=cfgs.RUN.eval_metrics, writing=True, training=True)
 
                 # save GAN in "./checkpoints/RUN_NAME/*"

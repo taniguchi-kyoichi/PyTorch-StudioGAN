@@ -74,7 +74,7 @@ class WORKER(object):
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
         self.global_rank = global_rank
-        self.local_rank = local_rank
+        self.local_rank = torch.device("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
         self.mu = mu
         self.sigma = sigma
         self.real_feats = real_feats
@@ -89,7 +89,7 @@ class WORKER(object):
         self.metric_dict_during_train = metric_dict_during_train
         self.metric_dict_during_final_eval = {}
 
-        self.cfgs.define_augments(local_rank)
+        self.cfgs.define_augments(self.local_rank)
         self.cfgs.define_losses()
         self.DATA = cfgs.DATA
         self.MODEL = cfgs.MODEL
@@ -103,16 +103,16 @@ class WORKER(object):
         self.is_stylegan = cfgs.MODEL.backbone in ["stylegan2", "stylegan3"]
         self.effective_batch_size = self.OPTIMIZATION.batch_size * self.OPTIMIZATION.acml_steps
         self.blur_init_sigma = self.STYLEGAN.blur_init_sigma
-        self.blur_fade_kimg = self.effective_batch_size * 200/32
+        self.blur_fade_kimg = self.effective_batch_size * 200 / 32
         self.DDP = self.RUN.distributed_data_parallel
         self.adc_fake = False
 
         num_classes = self.DATA.num_classes
 
         self.sampler = misc.define_sampler(self.DATA.name, self.MODEL.d_cond_mtd,
-                                            self.OPTIMIZATION.batch_size, self.DATA.num_classes)
+                                           self.OPTIMIZATION.batch_size, self.DATA.num_classes)
 
-        self.pl_reg = losses.PathLengthRegularizer(device=local_rank, pl_weight=cfgs.STYLEGAN.pl_weight, pl_no_weight_grad=(cfgs.MODEL.backbone == "stylegan2"))
+        self.pl_reg = losses.PathLengthRegularizer(device=self.local_rank, pl_weight=cfgs.STYLEGAN.pl_weight, pl_no_weight_grad=(cfgs.MODEL.backbone == "stylegan2"))
         self.l2_loss = torch.nn.MSELoss()
         self.ce_loss = torch.nn.CrossEntropyLoss()
         self.fm_loss = losses.feature_matching_loss
@@ -135,8 +135,7 @@ class WORKER(object):
             self.dis_logit_real_log, self.dis_logit_fake_log = torch.zeros(2, device=self.local_rank), torch.zeros(2, device=self.local_rank)
 
         if self.MODEL.aux_cls_type == "ADC":
-            num_classes = num_classes*2
-            self.adc_fake = True
+            num_classes = num_classes * 2
 
         if self.MODEL.d_cond_mtd == "AC":
             self.cond_loss = losses.CrossEntropyLoss()
@@ -151,7 +150,8 @@ class WORKER(object):
                                                               m_p=self.LOSS.m_p,
                                                               master_rank="cuda",
                                                               DDP=self.DDP)
-        else: pass
+        else:
+            pass
 
         if self.MODEL.aux_cls_type == "TAC":
             self.cond_loss_mi = copy.deepcopy(self.cond_loss)

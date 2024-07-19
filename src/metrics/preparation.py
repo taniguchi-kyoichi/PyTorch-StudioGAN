@@ -123,7 +123,7 @@ class LoadEvalModel(object):
 
 
 def prepare_moments(data_loader, eval_model, quantize, cfgs, logger, device):
-    disable_tqdm = device != 0
+    disable_tqdm = device != torch.device("mps")
     eval_model.eval()
     moment_dir = join(cfgs.RUN.save_dir, "moments")
     if not exists(moment_dir):
@@ -136,7 +136,7 @@ def prepare_moments(data_loader, eval_model, quantize, cfgs, logger, device):
         mu = np.load(moment_path)["mu"]
         sigma = np.load(moment_path)["sigma"]
     else:
-        if device == 0:
+        if device == torch.device("mps"):
             logger.info("Calculate moments of {ref} dataset using {eval_backbone} model.".\
                         format(ref=cfgs.RUN.ref_dataset, eval_backbone=cfgs.RUN.eval_backbone))
         mu, sigma = fid.calculate_moments(data_loader=data_loader,
@@ -147,16 +147,17 @@ def prepare_moments(data_loader, eval_model, quantize, cfgs, logger, device):
                                           world_size=cfgs.OPTIMIZATION.world_size,
                                           DDP=cfgs.RUN.distributed_data_parallel,
                                           disable_tqdm=disable_tqdm,
+                                          device=device,
                                           fake_feats=None)
 
-        if device == 0:
+        if device == torch.device("mps"):
             logger.info("Save calculated means and covariances to disk.")
         np.savez(moment_path, **{"mu": mu, "sigma": sigma})
     return mu, sigma
 
 
 def prepare_real_feats(data_loader, eval_model, num_feats, quantize, cfgs, logger, device):
-    disable_tqdm = device != 0
+    disable_tqdm = device != torch.device("mps")
     eval_model.eval()
     feat_dir = join(cfgs.RUN.save_dir, "feats")
     if not exists(feat_dir):
@@ -168,7 +169,7 @@ def prepare_real_feats(data_loader, eval_model, num_feats, quantize, cfgs, logge
     if is_file:
         real_feats = np.load(feat_path)["real_feats"]
     else:
-        if device == 0:
+        if device == torch.device("mps"):
             logger.info("Calculate features of {ref} dataset using {eval_backbone} model.".\
                         format(ref=cfgs.RUN.ref_dataset, eval_backbone=cfgs.RUN.eval_backbone))
         real_feats, real_probs, real_labels = features.stack_features(data_loader=data_loader,
@@ -180,7 +181,7 @@ def prepare_real_feats(data_loader, eval_model, num_feats, quantize, cfgs, logge
                                                 DDP=cfgs.RUN.distributed_data_parallel,
                                                 device=device,
                                                 disable_tqdm=disable_tqdm)
-        if device == 0:
+        if device == torch.device("mps"):
             logger.info("Save real_features to disk.")
             np.savez(feat_path, **{"real_feats": real_feats,
                                    "real_probs": real_probs,
@@ -189,9 +190,9 @@ def prepare_real_feats(data_loader, eval_model, num_feats, quantize, cfgs, logge
 
 
 def calculate_ins(data_loader, eval_model, quantize, splits, cfgs, logger, device):
-    disable_tqdm = device != 0
+    disable_tqdm = device != torch.device("mps")
     is_acc = True if "ImageNet" in cfgs.DATA.name and "Tiny" not in cfgs.DATA.name else False
-    if device == 0:
+    if device == torch.device("mps"):
         logger.info("Calculate inception score of the {ref} dataset uisng pre-trained {eval_backbone} model.".\
                     format(ref=cfgs.RUN.ref_dataset, eval_backbone=cfgs.RUN.eval_backbone))
     is_score, is_std, top1, top5 = ins.eval_dataset(data_loader=data_loader,
@@ -204,7 +205,7 @@ def calculate_ins(data_loader, eval_model, quantize, splits, cfgs, logger, devic
                                                     is_acc=is_acc,
                                                     is_torch_backbone=True if "torch" in cfgs.RUN.eval_backbone else False,
                                                     disable_tqdm=disable_tqdm)
-    if device == 0:
+    if device == torch.device("mps"):
         logger.info("Inception score={is_score}-Inception_std={is_std}".format(is_score=is_score, is_std=is_std))
         if is_acc:
             logger.info("{eval_model} Top1 acc: ({num} images): {Top1}".format(

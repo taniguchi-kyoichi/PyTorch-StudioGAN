@@ -120,27 +120,28 @@ class Generator(nn.Module):
         ops.init_weights(self.modules, g_init)
 
     def forward(self, z, label, shared_label=None, eval=False):
+        device = z.device  # デバイスの情報を取得
         affine_list = []
         with torch.cuda.amp.autocast() if self.mixed_precision and not eval else misc.dummy_context_mgr() as mp:
             if self.MODEL.info_type != "N/A":
                 if self.MODEL.g_info_injection == "concat":
-                    z = self.info_mix_linear(z)
+                    z = self.info_mix_linear(z).to(device)  # デバイスに移動
                 elif self.MODEL.g_info_injection == "cBN":
                     z, z_info = z[:, :self.z_dim], z[:, self.z_dim:]
-                    affine_list.append(self.info_proj_linear(z_info))
+                    affine_list.append(self.info_proj_linear(z_info).to(device))  # デバイスに移動
 
             zs = torch.split(z, self.chunk_size, 1)
             z = zs[0]
             if self.g_cond_mtd != "W/O":
                 if shared_label is None:
-                    shared_label = self.shared(label)
+                    shared_label = self.shared(label).to(device)  # デバイスに移動
                 affine_list.append(shared_label)
             if len(affine_list) == 0:
                 affines = [item for item in zs[1:]]
             else:
-                affines = [torch.cat(affine_list + [item], 1) for item in zs[1:]]
+                affines = [torch.cat(affine_list + [item.to(device)], 1) for item in zs[1:]]  # デバイスに移動
 
-            act = self.linear0(z)
+            act = self.linear0(z).to(device)  # デバイスに移動
             act = act.view(-1, self.in_dims[0], self.bottom, self.bottom)
             counter = 0
             for index, blocklist in enumerate(self.blocks):
