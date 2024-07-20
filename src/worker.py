@@ -148,7 +148,7 @@ class WORKER(object):
             self.cond_loss = losses.Data2DataCrossEntropyLoss(num_classes=num_classes,
                                                               temperature=self.LOSS.temperature,
                                                               m_p=self.LOSS.m_p,
-                                                              master_rank="cuda",
+                                                              master_rank=self.local_rank,
                                                               DDP=self.DDP)
         else:
             pass

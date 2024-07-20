@@ -1,22 +1,1 @@
-DATA:
-  name: "HAM10000"
-  num_classes: 7
-  img_channels: 3
-  img_size: 256
-
-MODEL:
-  backbone: "big_resnet"
-  g_cond_mtd: "cBN"
-  d_cond_mtd: "AC"
-  z_dim: 140
-  g_shared_dim: 0
-
-OPTIMIZATION:
-  batch_size: 8
-  total_steps: 100000
-  g_lr: 0.0002
-  d_lr: 0.0002
-  beta1: 0.5
-  beta2: 0.999
-LOSS:
-  cond_lambda: 1.0
+DATA:  name: "HAM10000"  num_classes: 7  img_channels: 3  img_size: 256MODEL:  backbone: "big_resnet"  g_cond_mtd: "cBN"  d_cond_mtd: "AC"  z_dim: 140  g_shared_dim: 0OPTIMIZATION:  batch_size: 8  total_steps: 100000  g_lr: 0.0002  d_lr: 0.0002  beta1: 0.5  beta2: 0.999LOSS:  cond_lambda: 1.0
