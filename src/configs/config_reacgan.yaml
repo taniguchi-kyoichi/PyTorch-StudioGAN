@@ -1,5 +1,5 @@
 DATA:
-  name: "HAM10000"
+  name: "HAM10000_resized"
   img_size: 256
   num_classes: 7
 MODEL:
