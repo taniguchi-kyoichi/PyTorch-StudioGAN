@@ -14,3 +14,4 @@ test/
 *.npy
 /checkpoints
 .idea/
+/fake_images

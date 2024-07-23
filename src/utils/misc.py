@@ -35,6 +35,7 @@ import matplotlib.pyplot as plt
 import utils.sample as sample
 import utils.losses as losses
 import utils.ckpt as ckpt
+import uuid
 
 
 class make_empty_object(object):
@@ -108,6 +109,7 @@ class GeneratorController(object):
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -197,9 +199,9 @@ def toggle_grad(model, grad, num_freeze_layers=-1, is_stylegan=False):
     else:
         try:
             num_blocks = len(model.in_dims)
-            assert num_freeze_layers < num_blocks,\
+            assert num_freeze_layers < num_blocks, \
                 "cannot freeze the {nfl}th block > total {nb} blocks.".format(nfl=num_freeze_layers,
-                                                                            nb=num_blocks)
+                                                                              nb=num_blocks)
         except:
             pass
 
@@ -298,7 +300,8 @@ def calculate_all_sn(model, prefix):
     return sigmas
 
 
-def apply_standing_statistics(generator, standing_max_batch, standing_step, DATA, MODEL, LOSS, OPTIMIZATION, RUN, STYLEGAN,
+def apply_standing_statistics(generator, standing_max_batch, standing_step, DATA, MODEL, LOSS, OPTIMIZATION, RUN,
+                              STYLEGAN,
                               device, global_rank, logger):
     generator.train()
     generator.apply(reset_bn_statistics)
@@ -311,36 +314,39 @@ def apply_standing_statistics(generator, standing_max_batch, standing_step, DATA
         else:
             rand_batch_size = random.randint(1, batch_size_per_gpu) * OPTIMIZATION.world_size
         fake_images, fake_labels, _, _, _, _, _ = sample.generate_images(z_prior=MODEL.z_prior,
-                                                                   truncation_factor=-1,
-                                                                   batch_size=rand_batch_size,
-                                                                   z_dim=MODEL.z_dim,
-                                                                   num_classes=DATA.num_classes,
-                                                                   y_sampler="totally_random",
-                                                                   radius="N/A",
-                                                                   generator=generator,
-                                                                   discriminator=None,
-                                                                   is_train=True,
-                                                                   LOSS=LOSS,
-                                                                   RUN=RUN,
-                                                                   MODEL=MODEL,
-                                                                   is_stylegan=MODEL.backbone in ["stylegan2", "stylegan3"],
-                                                                   generator_mapping=None,
-                                                                   generator_synthesis=None,
-                                                                   style_mixing_p=0.0,
-                                                                   stylegan_update_emas=False,
-                                                                   device=device,
-                                                                   cal_trsp_cost=False)
+                                                                         truncation_factor=-1,
+                                                                         batch_size=rand_batch_size,
+                                                                         z_dim=MODEL.z_dim,
+                                                                         num_classes=DATA.num_classes,
+                                                                         y_sampler="totally_random",
+                                                                         radius="N/A",
+                                                                         generator=generator,
+                                                                         discriminator=None,
+                                                                         is_train=True,
+                                                                         LOSS=LOSS,
+                                                                         RUN=RUN,
+                                                                         MODEL=MODEL,
+                                                                         is_stylegan=MODEL.backbone in ["stylegan2",
+                                                                                                        "stylegan3"],
+                                                                         generator_mapping=None,
+                                                                         generator_synthesis=None,
+                                                                         style_mixing_p=0.0,
+                                                                         stylegan_update_emas=False,
+                                                                         device=device,
+                                                                         cal_trsp_cost=False)
     generator.eval()
+
 
 def define_sampler(dataset_name, dis_cond_mtd, batch_size, num_classes):
     if dis_cond_mtd != "W/O":
-        if dataset_name == "CIFAR10" or batch_size >= num_classes*8:
+        if dataset_name == "CIFAR10" or batch_size >= num_classes * 8:
             sampler = "acending_all"
         else:
             sampler = "acending_some"
     else:
         sampler = "totally_random"
     return sampler
+
 
 def make_GAN_trainable(Gen, Gen_ema, Dis):
     Gen.train()
@@ -424,9 +430,21 @@ def plot_img_canvas(images, save_path, num_cols, logger, logging=True):
     if not exists(directory):
         os.makedirs(directory)
 
-    save_image(((images + 1)/2).clamp(0.0, 1.0), save_path, padding=0, nrow=num_cols)
+    save_image(((images + 1) / 2).clamp(0.0, 1.0), save_path, padding=0, nrow=num_cols)
     if logging:
         logger.info("Save image canvas to {}".format(save_path))
+
+
+def save_images(images, save_dir, class_idx):
+    directory = f"{save_dir}/class_{class_idx}"
+    if not exists(directory):
+        os.makedirs(directory)
+
+    for image in images:
+        random_id = uuid.uuid4()
+        save_path = f"{directory}/image_{random_id}.png"
+        save_image(image, save_path)
+        print(f"Saved image to {save_path}")
 
 
 def plot_spectrum_image(real_spectrum, fake_spectrum, directory, logger, logging=True):
@@ -480,10 +498,11 @@ def plot_tsne_scatter_plot(df, tsne_results, flag, directory, logger, logging=Tr
 
 
 def save_images_png(data_loader, generator, discriminator, is_generate, num_images, y_sampler, batch_size, z_prior,
-                    truncation_factor, z_dim, num_classes, LOSS, OPTIMIZATION, RUN, MODEL, is_stylegan, generator_mapping,
+                    truncation_factor, z_dim, num_classes, LOSS, OPTIMIZATION, RUN, MODEL, is_stylegan,
+                    generator_mapping,
                     generator_synthesis, directory, device):
     num_batches = math.ceil(float(num_images) / float(batch_size))
-    if RUN.distributed_data_parallel: num_batches = num_batches//OPTIMIZATION.world_size + 1
+    if RUN.distributed_data_parallel: num_batches = num_batches // OPTIMIZATION.world_size + 1
     if is_generate:
         image_type = "fake"
     else:
@@ -504,26 +523,26 @@ def save_images_png(data_loader, generator, discriminator, is_generate, num_imag
             start = i * batch_size
             end = start + batch_size
             if is_generate:
-                images, labels, _, _, _, _, _= sample.generate_images(z_prior=z_prior,
-                                                                 truncation_factor=truncation_factor,
-                                                                 batch_size=batch_size,
-                                                                 z_dim=z_dim,
-                                                                 num_classes=num_classes,
-                                                                 y_sampler=y_sampler,
-                                                                 radius="N/A",
-                                                                 generator=generator,
-                                                                 discriminator=discriminator,
-                                                                 is_train=False,
-                                                                 LOSS=LOSS,
-                                                                 RUN=RUN,
-                                                                 MODEL=MODEL,
-                                                                 is_stylegan=is_stylegan,
-                                                                 generator_mapping=generator_mapping,
-                                                                 generator_synthesis=generator_synthesis,
-                                                                 style_mixing_p=0.0,
-                                                                 stylegan_update_emas=False,
-                                                                 device=device,
-                                                                 cal_trsp_cost=False)
+                images, labels, _, _, _, _, _ = sample.generate_images(z_prior=z_prior,
+                                                                       truncation_factor=truncation_factor,
+                                                                       batch_size=batch_size,
+                                                                       z_dim=z_dim,
+                                                                       num_classes=num_classes,
+                                                                       y_sampler=y_sampler,
+                                                                       radius="N/A",
+                                                                       generator=generator,
+                                                                       discriminator=discriminator,
+                                                                       is_train=False,
+                                                                       LOSS=LOSS,
+                                                                       RUN=RUN,
+                                                                       MODEL=MODEL,
+                                                                       is_stylegan=is_stylegan,
+                                                                       generator_mapping=generator_mapping,
+                                                                       generator_synthesis=generator_synthesis,
+                                                                       style_mixing_p=0.0,
+                                                                       stylegan_update_emas=False,
+                                                                       device=device,
+                                                                       cal_trsp_cost=False)
             else:
                 try:
                     images, labels = next(data_iter)
@@ -532,7 +551,7 @@ def save_images_png(data_loader, generator, discriminator, is_generate, num_imag
 
             for idx, img in enumerate(images.detach()):
                 if batch_size * i + idx < num_images:
-                    save_image(((img+1)/2).clamp(0.0, 1.0),
+                    save_image(((img + 1) / 2).clamp(0.0, 1.0),
                                join(directory, str(labels[idx].item()), "{idx}.png".format(idx=batch_size * i + idx)))
                 else:
                     pass
@@ -599,7 +618,7 @@ def compute_gradient(fx, logits, label, num_classes):
     probs = torch.nn.Softmax(dim=1)(logits.detach().cpu())
     gt_prob = F.one_hot(label, num_classes)
     oneMp = gt_prob - probs
-    preds = (probs*gt_prob).sum(-1)
+    preds = (probs * gt_prob).sum(-1)
     grad = torch.mean(fx.unsqueeze(1) * oneMp.unsqueeze(2), dim=0)
     return fx.norm(dim=1), preds, torch.norm(grad, dim=1)
 
@@ -612,7 +631,7 @@ def load_parameters(src, dst, strict=True):
                 dst[dst_key].copy_(src[dst_key])
             else:
                 mismatch_names.append(dst_key)
-                err = "source tensor {key}({src}) does not match with destination tensor {key}({dst}).".\
+                err = "source tensor {key}({src}) does not match with destination tensor {key}({dst}).". \
                     format(key=dst_key, src=src[dst_key].shape, dst=dst_value.shape)
                 assert not strict, err
         else:
@@ -625,7 +644,7 @@ def enable_allreduce(dict_):
     loss = 0
     for key, value in dict_.items():
         if value is not None and key != "label":
-            loss += value.mean()*0
+            loss += value.mean() * 0
     return loss
 
 

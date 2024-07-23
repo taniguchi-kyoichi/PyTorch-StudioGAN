@@ -11,6 +11,7 @@ import os
 import random
 import sys
 import tempfile
+from PIL import Image
 
 from torch.multiprocessing import Process
 import torch
@@ -21,6 +22,9 @@ import loader
 import utils.hdf5 as hdf5
 import utils.log as log
 import utils.misc as misc
+from models.model import load_generator_discriminator
+import utils.sample as sample
+from tqdm import tqdm
 
 RUN_NAME_FORMAT = ("{data_name}-" "{framework}-" "{phase}-" "{timestamp}")
 
@@ -107,6 +111,12 @@ def load_configs_initialize_training():
                         help="[InceptionV3_tf, InceptionV3_torch, ResNet50_torch, SwAV_torch, DINO_torch, Swin-T_torch]")
     parser.add_argument("-ref", "--ref_dataset", type=str, default="train", help="reference dataset for evaluation[train/valid/test]")
     parser.add_argument("--calc_is_ref_dataset", action="store_true", help="whether to calculate a inception score of the ref dataset.")
+
+    parser.add_argument("--generate_images", action="store_true", help="generate images")
+    parser.add_argument("--num_images_per_class", type=int, default=100, help="number of images to generate per class")
+    parser.add_argument("--output_dir", type=str, default="./generated_images",
+                        help="directory to save generated images")
+
     args = parser.parse_args()
     run_cfgs = vars(args)
 
@@ -173,14 +183,78 @@ def load_configs_initialize_training():
 
     if cfgs.OPTIMIZATION.world_size == 1:
         print("You have chosen a specific GPU. This will completely disable data parallelism.")
-    return cfgs, gpus_per_node, run_name, hdf5_path, rank
+    return cfgs, gpus_per_node, run_name, hdf5_path, rank, args
+
+
+from os.path import dirname, exists, join, isfile
+from torchvision.utils import save_image
+def plot_img_canvas(images, save_path, num_cols, logger=None, logging=True):
+    directory = dirname(save_path)
+    if not exists(directory):
+        os.makedirs(directory)
+
+    save_image(((images + 1) / 2).clamp(0.0, 1.0), save_path, padding=0, nrow=num_cols)
+    if logging and logger is not None:
+        logger.info("Save image canvas to {}".format(save_path))
+
+def generate_images_per_class(cfgs, num_images_per_class, output_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    generator, generator_mapping, generator_synthesis, _, _, _, _, _ = load_generator_discriminator(
+        DATA=cfgs.DATA,
+        OPTIMIZATION=cfgs.OPTIMIZATION,
+        MODEL=cfgs.MODEL,
+        STYLEGAN=cfgs.STYLEGAN,
+        MODULES=cfgs.MODULES,
+        RUN=cfgs.RUN,
+        device=device,
+        logger=None
+    )
+
+    generator.eval()
+
+    with torch.no_grad():
+        for class_id in range(cfgs.DATA.num_classes):
+            class_dir = os.path.join(output_dir, str(class_id))
+            if not os.path.exists(class_dir):
+                os.makedirs(class_dir)
+
+            fake_images, fake_labels, _, _, _, _, _ = sample.generate_images(
+                z_prior=cfgs.MODEL.z_prior,
+                truncation_factor=cfgs.RUN.truncation_factor,
+                batch_size=num_images_per_class,
+                z_dim=cfgs.MODEL.z_dim,
+                num_classes=cfgs.DATA.num_classes,
+                y_sampler=class_id,
+                radius="N/A",
+                generator=generator,
+                discriminator=None,
+                is_train=False,
+                LOSS=cfgs.LOSS,
+                RUN=cfgs.RUN,
+                MODEL=cfgs.MODEL,
+                device=device,
+                is_stylegan=cfgs.MODEL.backbone in ["stylegan2", "stylegan3"],
+                generator_mapping=generator_mapping,
+                generator_synthesis=generator_synthesis,
+                style_mixing_p=0.0,
+                stylegan_update_emas=False,
+                cal_trsp_cost=False
+            )
+
+            for i in tqdm(range(num_images_per_class), desc=f"Generating images for class {class_id}"):
+                fake_image = fake_images[i].unsqueeze(0)  # Add batch dimension
+                save_image(((fake_image + 1) / 2).clamp(0.0, 1.0), os.path.join(class_dir, f"{i:04d}.png"))
+
+    print(f"Generated images saved in {output_dir}")
 
 
 if __name__ == "__main__":
-    cfgs, gpus_per_node, run_name, hdf5_path, rank = load_configs_initialize_training()
+    cfgs, gpus_per_node, run_name, hdf5_path, rank, args = load_configs_initialize_training()
 
-    loader.load_worker(local_rank=rank,
-                       cfgs=cfgs,
-                       gpus_per_node=gpus_per_node,
-                       run_name=run_name,
-                       hdf5_path=hdf5_path)
+    if args.generate_images:
+        loader.load_gen_worker(local_rank=rank, cfgs=cfgs, gpus_per_node=gpus_per_node, run_name=run_name, hdf5_path=hdf5_path)
+    else:
+        loader.load_worker(local_rank=rank, cfgs=cfgs, gpus_per_node=gpus_per_node, run_name=run_name, hdf5_path=hdf5_path)
