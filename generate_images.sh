@@ -2,9 +2,9 @@
 
 # Constants
 CONFIG_PATH="src/configs/config_reacgan.yaml"
-DATA_PATH="data/HAM10000"
+DATA_PATH="data/HAM10000_resized"
 CKPT_PATH="checkpoints"
-OUTPUT_DIR="outputs/generated_class_images"
+OUTPUT_DIR="fake_images"
 NUM_IMAGES_PER_CLASS=100
 
 # Check if all required directories exist

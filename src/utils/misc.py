@@ -443,7 +443,7 @@ def save_images(images, save_dir, class_idx):
     for image in images:
         random_id = uuid.uuid4()
         save_path = f"{directory}/image_{random_id}.png"
-        save_image(image, save_path)
+        save_image(((image + 1) / 2).clamp(0.0, 1.0), save_path, padding=0, nrow=1)
         print(f"Saved image to {save_path}")
 
 

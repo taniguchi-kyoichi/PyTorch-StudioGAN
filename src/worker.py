@@ -810,28 +810,28 @@ class WORKER(object):
             misc.make_GAN_untrainable(self.Gen, self.Gen_ema, self.Dis)
             generator, generator_mapping, generator_synthesis = self.gen_ctlr.prepare_generator()
 
-            for _ in range(100):
-                fake_images, fake_labels, _, _, _, _, _ = sample.generate_images(z_prior=self.MODEL.z_prior,
-                                                                                 truncation_factor=self.RUN.truncation_factor,
-                                                                                 batch_size=self.OPTIMIZATION.batch_size,
-                                                                                 z_dim=self.MODEL.z_dim,
-                                                                                 num_classes=self.DATA.num_classes,
-                                                                                 y_sampler=self.sampler,
-                                                                                 radius="N/A",
-                                                                                 generator=generator,
-                                                                                 discriminator=self.Dis,
-                                                                                 is_train=False,
-                                                                                 LOSS=self.LOSS,
-                                                                                 RUN=self.RUN,
-                                                                                 MODEL=self.MODEL,
-                                                                                 device=self.local_rank,
-                                                                                 is_stylegan=self.is_stylegan,
-                                                                                 generator_mapping=generator_mapping,
-                                                                                 generator_synthesis=generator_synthesis,
-                                                                                 style_mixing_p=0.0,
-                                                                                 stylegan_update_emas=False,
-                                                                                 cal_trsp_cost=False)
-                misc.save_images(fake_images.detach().cpu(), save_dir, fake_labels.detach().cpu()[0])
+        for _ in range(100):
+            fake_images, fake_labels, _, _, _, _, _ = sample.generate_images(z_prior=self.MODEL.z_prior,
+                                                                             truncation_factor=self.RUN.truncation_factor,
+                                                                             batch_size=self.OPTIMIZATION.batch_size,
+                                                                             z_dim=self.MODEL.z_dim,
+                                                                             num_classes=self.DATA.num_classes,
+                                                                             y_sampler=self.sampler,
+                                                                             radius="N/A",
+                                                                             generator=generator,
+                                                                             discriminator=self.Dis,
+                                                                             is_train=False,
+                                                                             LOSS=self.LOSS,
+                                                                             RUN=self.RUN,
+                                                                             MODEL=self.MODEL,
+                                                                             device=self.local_rank,
+                                                                             is_stylegan=self.is_stylegan,
+                                                                             generator_mapping=generator_mapping,
+                                                                             generator_synthesis=generator_synthesis,
+                                                                             style_mixing_p=0.0,
+                                                                             stylegan_update_emas=False,
+                                                                             cal_trsp_cost=False)
+            misc.save_images(fake_images.detach().cpu(), save_dir, fake_labels.detach().cpu()[0])
 
     # -----------------------------------------------------------------------------
     # evaluate GAN using IS, FID, and Precision and recall.
